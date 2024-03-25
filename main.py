@@ -8,6 +8,8 @@ from moviepy.editor import concatenate_videoclips
 from moviepy.video.fx.all import resize
 import requests
 from dotenv import load_dotenv
+import tkinter as tk
+from tkinter import filedialog
 
 # Load environment variables from .env file
 load_dotenv()
@@ -49,44 +51,72 @@ def create_video(gif_file, mp3_file):
     gif_clip = VideoFileClip(gif_file)
     audio_clip = AudioFileClip(mp3_file)
     audio_duration = audio_clip.duration
-    
-    # Calculate the number of times to loop the GIF to match the audio duration
+
     num_loops = int(audio_duration / gif_clip.duration) + 1
     gif_clips = [gif_clip] * num_loops
-    
-    # Concatenate the GIF clips
     concatenated_gif = concatenate_videoclips(gif_clips)
-    
-    # Trim the concatenated GIF to match the audio duration
     concatenated_gif = concatenated_gif.set_duration(audio_duration)
-    
-    # Combine GIF and audio
+
     final_clip = concatenated_gif.set_audio(audio_clip)
-    
-    # Resize the final clip to 1080p resolution
     final_clip = final_clip.fx(resize, width=1920, height=1080)
 
-    # Write to file with specified resolution
-    output_path = os.path.join("video", "output.mp4")
+    # Get the directory of the MP3 file
+    mp3_dir = os.path.dirname(mp3_file)
+
+    # Construct the output path in the same directory as the MP3 file
+    output_filename = os.path.splitext(os.path.basename(mp3_file))[0] + ".mp4"
+    output_path = os.path.join(mp3_dir, output_filename)
+
     final_clip.write_videofile(output_path, fps=24, codec="libx264", preset="medium", bitrate="5000k", threads=8)
 
-    # Clean up temporary files
+    final_clip.close()
+    gif_clip.close()
     os.remove(gif_file)
 
-# Main function
-def main():
-    if len(sys.argv) != 3:
-        print("Usage: python autogif.py <search_query> <mp3_file>")
-        return
+def create_gui():
+    def browse_file():
+        file_path = filedialog.askopenfilename(filetypes=[("MP3 Files", "*.mp3")])
+        mp3_entry.delete(0, tk.END)
+        mp3_entry.insert(0, file_path)
 
-    search_query = sys.argv[1]
-    mp3_file = sys.argv[2]
+    def create_video_callback():
+        search_query = query_entry.get()
+        mp3_file = mp3_entry.get()
 
-    # Initialize Giphy client
-    api_instance = giphy_client.DefaultApi()
+        if not search_query or not mp3_file:
+            error_label.config(text="Please enter a search query and select an MP3 file.")
+            return
 
-    gif_file = get_gif(api_instance, search_query)
-    create_video(gif_file, mp3_file)
+        api_instance = giphy_client.DefaultApi()
+        gif_file = get_gif(api_instance, search_query)
+        create_video(gif_file, mp3_file)
+        success_label.config(text="Video created successfully!")
+
+    root = tk.Tk()
+    root.title("Create Video from GIF and MP3")
+
+    query_label = tk.Label(root, text="GIF Search Query:")
+    query_label.pack()
+    query_entry = tk.Entry(root)
+    query_entry.pack()
+
+    mp3_label = tk.Label(root, text="MP3 File:")
+    mp3_label.pack()
+    mp3_entry = tk.Entry(root)
+    mp3_entry.pack()
+    browse_button = tk.Button(root, text="Browse", command=browse_file)
+    browse_button.pack()
+
+    create_button = tk.Button(root, text="Create Video", command=create_video_callback)
+    create_button.pack()
+
+    error_label = tk.Label(root, text="", fg="red")
+    error_label.pack()
+
+    success_label = tk.Label(root, text="", fg="green")
+    success_label.pack()
+
+    root.mainloop()
 
 if __name__ == "__main__":
-    main()
+    create_gui()
